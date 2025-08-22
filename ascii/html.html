@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASCII Art Generator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <h1>ascii art generator</h1>
+  <div class="controls">
+    <input type="file" id="image-input" accept="image/*" />
+    <input type="number" id="resolution" placeholder="width (default auto)" />
+    <select id="char-set">
+      <option value="@%#*+=-:. ">@%#*+=-:. </option>
+      <option value="$W08B@#&!?^ ">$W08B@#&!?^ </option>
+      <option value="█▓▒░ ">█▓▒░ </option>
+    </select>
+    <button id="copy">copy</button>
+    <button id="download">download</button>
+    <button id="toggle-theme">toggle theme</button>
+    <button id="webcam-btn">webcam ascii</button>
+  </div>
+  <div id="loading" style="display:none">converting... please wait</div>
+  <video id="webcam" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
+  <pre id="ascii-output"></pre>
+
+  <script>
+    const imageInput = document.getElementById("image-input");
+    const charSetSelect = document.getElementById("char-set");
+    const resolutionInput = document.getElementById("resolution");
+    const asciiOutput = document.getElementById("ascii-output");
+    const copyBtn = document.getElementById("copy");
+    const downloadBtn = document.getElementById("download");
+    const themeBtn = document.getElementById("toggle-theme");
+    const webcamBtn = document.getElementById("webcam-btn");
+    const loading = document.getElementById("loading");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const webcam = document.getElementById("webcam");
+
+    let darkMode = true;
+
+    function mapBrightnessToChar(brightness, charSet) {
+      const index = Math.floor((brightness / 255) * (charSet.length - 1));
+      return charSet[index];
+    }
+
+    function getAutoWidth(img) {
+      return img.width > img.height ? 120 : 80;
+    }
+
+    function generateASCII(img, charSet, width) {
+      const scale = img.height / img.width;
+      const height = Math.round(width * scale * 0.5);
+
+      canvas.width = width;
+      canvas.height = height;
+      ctx.drawImage(img, 0, 0, width, height);
+
+      const imageData = ctx.getImageData(0, 0, width, height);
+      let ascii = "";
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const offset = (y * width + x) * 4;
+          const r = imageData.data[offset];
+          const g = imageData.data[offset + 1];
+          const b = imageData.data[offset + 2];
+          const avg = (r + g + b) / 3;
+          ascii += mapBrightnessToChar(avg, charSet);
+        }
+        ascii += "\n";
+      }
+
+      asciiOutput.textContent = ascii;
+    }
+
+    imageInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const img = new Image();
+      const reader = new FileReader();
+
+      reader.onload = (event) => {
+        img.src = event.target.result;
+      };
+
+      img.onload = () => {
+        loading.style.display = "block";
+        asciiOutput.textContent = "";
+
+        const charSet = charSetSelect.value;
+        const userWidth = parseInt(resolutionInput.value);
+        const width = userWidth || getAutoWidth(img);
+
+        generateASCII(img, charSet, width);
+        loading.style.display = "none";
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+    copyBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(asciiOutput.textContent).then(() => {
+        alert("ascii art copied to clipboard");
+      });
+    });
+
+    downloadBtn.addEventListener("click", () => {
+      const blob = new Blob([asciiOutput.textContent], { type: "text/plain" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "ascii_art.txt";
+      link.click();
+    });
+
+    themeBtn.addEventListener("click", () => {
+      darkMode = !darkMode;
+      document.body.setAttribute("data-theme", darkMode ? "dark" : "light");
+    });
+
+    webcamBtn.addEventListener("click", () => {
+      navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+        webcam.srcObject = stream;
+        webcam.style.display = "none";
+
+        const interval = setInterval(() => {
+          const charSet = charSetSelect.value;
+          const width = parseInt(resolutionInput.value) || 80;
+
+          canvas.width = width;
+          canvas.height = Math.floor(width * 0.5 * (webcam.videoHeight / webcam.videoWidth));
+
+          ctx.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+          const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+          let ascii = "";
+          for (let y = 0; y < canvas.height; y++) {
+            for (let x = 0; x < canvas.width; x++) {
+              const i = (y * canvas.width + x) * 4;
+              const avg = (frame.data[i] + frame.data[i + 1] + frame.data[i + 2]) / 3;
+              ascii += mapBrightnessToChar(avg, charSet);
+            }
+            ascii += "\n";
+          }
+
+          asciiOutput.textContent = ascii;
+        }, 100);
+      });
+    });
+  </script>
+</body>
+</html>
